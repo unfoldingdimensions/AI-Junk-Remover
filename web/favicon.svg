@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="AI Tools Junk Remover">
+  <rect width="32" height="32" rx="7" fill="#F4F1EA"/>
+  <g transform="translate(4 4)" fill="none" stroke="#5F7A5A" stroke-width="1.9" stroke-linecap="round">
+    <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m3 0-.8 12.1a2 2 0 0 1-2 1.9H8.8a2 2 0 0 1-2-1.9L6 7"/>
+    <path d="M10 11v6M14 11v6"/>
+  </g>
+</svg>

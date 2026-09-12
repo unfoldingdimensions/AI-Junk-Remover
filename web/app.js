@@ -409,6 +409,7 @@ async function triggerScan(onlyIds) {
   // adoptDetail swaps in fresh data per tool and prunes just-deleted paths,
   // so expanded cards never collapse and user selections stick.
   pollStatus();
+  schedulePoll(FAST_POLL_MS); // a scan just started, get on the fast cadence now
 }
 
 function setSelection(path, item, on) {
@@ -772,10 +773,24 @@ els.toolSort.addEventListener('change', () => {
 
 // ---------- boot ----------
 
+// Poll fast while a scan or delete is in flight, and slowly when idle. The
+// status endpoint is cheap, but hitting it 1.4x/second forever is pointless.
+const FAST_POLL_MS = 700;
+const IDLE_POLL_MS = 5000;
+
+let pollTimer = null;
+
+function schedulePoll(delayMs) {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    await pollStatus();
+    schedulePoll(S.scanning || S.deleting ? FAST_POLL_MS : IDLE_POLL_MS);
+  }, delayMs);
+}
+
 (async function boot() {
   renderStatus();
   await pollStatus();
   await triggerScan(null); // full scan; clears stale details/selection from any prior session
-  // local endpoint — a single 700ms poll is negligible
-  setInterval(pollStatus, 700);
+  schedulePoll(S.scanning ? FAST_POLL_MS : IDLE_POLL_MS);
 })();
