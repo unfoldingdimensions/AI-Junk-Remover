@@ -13,6 +13,7 @@ import { execSync } from 'node:child_process';
 import { scanTool } from '../lib/scanner.mjs';
 import { recyclePaths, logHistory, readHistory } from '../lib/deleter.mjs';
 import { validateDeleteTarget } from '../lib/validate.mjs';
+import { classify } from '../lib/rules.mjs';
 
 const SANDBOX = path.join(os.tmpdir(), 'aijr-sandbox');
 const FAKE_HOME = path.join(SANDBOX, '.fakecli');
@@ -69,6 +70,37 @@ async function main() {
   check('skills subtree -> locked (never junk beneath it)',
     item('skills')?.tier === 'locked' && item('skills').size === 700, JSON.stringify(item('skills')));
   check('junkSize = safe + review (5200)', res.junkSize === 5200, `got ${res.junkSize}`);
+
+  // 1b. A root marked junkRoot:'safe' must be ONE item (no double-counting of
+  //     its children) and must still be blocked if it holds a protected file.
+  const JUNK = path.join(SANDBOX, 'fakeupdater');
+  await write(path.join(JUNK, 'cache', 'a.bin'), 1000);
+  await write(path.join(JUNK, 'logs', 'x.log'), 200);
+  const junkTool = {
+    id: 'fakeupdater', name: 'Fake Updater', vendor: 'Test', type: 'CLI',
+    roots: [{ kind: 'dir', path: JUNK, junkRoot: 'safe', label: 'updater cache' }],
+  };
+  const jres = await scanTool(junkTool);
+  check('junkRoot total counted once (1200)', jres.totalSize === 1200, `got ${jres.totalSize}`);
+  check('junkRoot collapses to a single item', jres.items.length === 1, JSON.stringify(jres.items));
+  check('junkRoot safe size not double-counted', jres.safeSize === 1200, `got ${jres.safeSize}`);
+
+  const JUNK2 = path.join(SANDBOX, 'fakeupdater2');
+  await write(path.join(JUNK2, 'cache', 'junk.bin'), 900);
+  await write(path.join(JUNK2, 'cache', 'settings.json'), 20);
+  const junkTool2 = {
+    id: 'fakeupdater2', name: 'Fake Updater 2', vendor: 'Test', type: 'CLI',
+    roots: [{ kind: 'dir', path: JUNK2, junkRoot: 'safe', label: 'updater cache' }],
+  };
+  const jres2 = await scanTool(junkTool2);
+  check('junkRoot holding a protected file is not Safe',
+    jres2.items.length === 1 && jres2.items[0].tier === 'blocked' && jres2.safeSize === 0,
+    JSON.stringify(jres2.items));
+
+  // 1c. Session state is Review (shown, unchecked) — never auto-selected Safe.
+  check('todos -> review', classify('todos', true)?.tier === 'review');
+  check('tasks -> review', classify('tasks', true)?.tier === 'review');
+  check('session-env still safe', classify('session-env', true)?.tier === 'safe');
 
   // 2. delete validation (sandbox injected as an extra root): refuse everything else
   const outside = await validateDeleteTarget(path.join(os.tmpdir(), 'definitely-not-a-tool'));
