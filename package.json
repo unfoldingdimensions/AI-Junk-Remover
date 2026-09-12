@@ -1,0 +1,31 @@
+{
+  "name": "ai-tools-junk-remover",
+  "version": "1.0.0",
+  "description": "Windows-only local WebUI that inventories every AI IDE, CLI and agent on your PC, itemizes the caches, logs and updater leftovers they leave behind, and deletes them to the Recycle Bin. Zero dependencies.",
+  "license": "Apache-2.0",
+  "private": false,
+  "type": "module",
+  "os": [
+    "win32"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test/sandbox-test.mjs"
+  },
+  "keywords": [
+    "windows",
+    "disk-cleanup",
+    "junk-cleaner",
+    "ai-tools",
+    "claude-code",
+    "codex",
+    "cursor",
+    "copilot",
+    "developer-tools",
+    "zero-dependency",
+    "recycle-bin"
+  ]
+}

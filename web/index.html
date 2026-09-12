@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- desktop-only companion: no viewport meta, so narrow windows render the
+       full desktop layout instead of a broken responsive one -->
+  <title>AI Tools Junk Remover</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="chrome topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m3 0-.8 12.1a2 2 0 0 1-2 1.9H8.8a2 2 0 0 1-2-1.9L6 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+      <h1>AI Tools Junk Remover</h1>
+    </div>
+    <div class="topbar-stats">
+      <span class="stat-pill" id="junkPill" title="Safe + review junk across all tools">Junk: —</span>
+    </div>
+    <div class="topbar-actions">
+      <button id="rescanBtn" class="btn" type="button">Scan PC</button>
+      <button id="deleteAllBtn" class="btn btn-danger" type="button" disabled>Delete All Junk</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary" id="summary" aria-label="Summary">
+      <div class="summary-item"><span class="summary-num" id="sumTools">—</span><span class="summary-label">tools found</span></div>
+      <div class="summary-item"><span class="summary-num mono" id="sumFootprint">—</span><span class="summary-label">AI footprint</span></div>
+      <div class="summary-item"><span class="summary-num mono safe" id="sumSafe">—</span><span class="summary-label">safe junk</span></div>
+      <div class="summary-item"><span class="summary-num mono warn" id="sumReview">—</span><span class="summary-label">review</span></div>
+      <div class="summary-item"><span class="summary-num mono" id="sumLifetime">—</span><span class="summary-label">reclaimed all-time</span></div>
+      <div class="summary-filter">
+        <label for="toolSort">Sort tools</label>
+        <select id="toolSort">
+          <option value="junk">Junk size</option>
+          <option value="total">Total size</option>
+          <option value="name">Name</option>
+        </select>
+      </div>
+      <div class="summary-filter">
+        <label for="ageFilter">Review items older than</label>
+        <select id="ageFilter">
+          <option value="0">any age</option>
+          <option value="7">7 days</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+        </select>
+      </div>
+    </section>
+
+    <div id="scanBanner" class="scan-banner hidden" role="status" aria-live="polite">
+      <div class="scan-spinner" aria-hidden="true"></div>
+      <div class="scan-text">
+        <strong id="scanTitle">Scanning your PC…</strong>
+        <span id="scanSub">Looking for AI tools…</span>
+      </div>
+      <div class="scan-track" aria-hidden="true"><div id="scanFill"></div></div>
+    </div>
+
+    <section id="tools" class="tools" aria-label="AI tools"></section>
+
+    <div id="empty" class="empty hidden">
+      <p>No AI tools found yet.</p>
+      <p class="empty-sub">Hit <strong>Scan PC</strong> to look for Claude Code, Codex, Gemini, Cursor, Windsurf, OpenCode and 15+ others.</p>
+    </div>
+  </main>
+
+  <footer class="chrome statusbar">
+    <div id="deleteBar" class="delete-bar hidden"><div id="deleteBarFill"></div></div>
+    <span id="statusText" aria-live="polite">Starting…</span>
+  </footer>
+
+  <dialog id="confirmModal">
+    <h2 id="modalTitle">Delete junk</h2>
+    <p id="modalSummary" class="modal-summary"></p>
+    <p class="modal-tip">Tip: close the tool first — files still in use can't be deleted and will be skipped.</p>
+    <div class="mode-row">
+      <label class="radio">
+        <input type="radio" name="delMode" value="recycle" checked>
+        <span><strong>Recycle Bin</strong> — recoverable</span>
+      </label>
+      <label class="radio">
+        <input type="radio" name="delMode" value="permanent">
+        <span><strong>Permanent</strong> — unrecoverable</span>
+      </label>
+    </div>
+    <div id="permanentConfirm" class="hidden">
+      <label for="confirmInput">Type <code>DELETE</code> to confirm permanent deletion</label>
+      <input id="confirmInput" type="text" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="modalFailures" class="modal-failures hidden"></div>
+    <div class="modal-actions">
+      <button id="modalCancel" class="btn" type="button">Cancel</button>
+      <button id="modalConfirm" class="btn btn-danger" type="button" disabled>Delete</button>
+    </div>
+  </dialog>
+
+  <div id="deleteSummary" class="delete-summary hidden" role="status" aria-live="polite">
+    <div class="ds-head">
+      <strong>Delete complete</strong>
+      <button id="dsClose" class="ds-close" type="button" aria-label="Dismiss summary">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="dsBody"></div>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
