@@ -398,8 +398,13 @@ async function pollStatus() {
 }
 
 async function triggerScan(onlyIds) {
-  const q = onlyIds ? `?tools=${onlyIds.join(',')}` : '';
-  try { await api(`/api/scan${q}`); } catch { /* already scanning */ }
+  try {
+    await api('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tools: onlyIds || null }),
+    });
+  } catch { /* already scanning */ }
   // Details and selection survive the rescan (stale-while-revalidate):
   // adoptDetail swaps in fresh data per tool and prunes just-deleted paths,
   // so expanded cards never collapse and user selections stick.
@@ -720,8 +725,13 @@ els.tools.addEventListener('click', async (e) => {
   }
 
   if (action === 'open') {
-    try { await api(`/api/open?path=${encodeURIComponent(actionEl.dataset.path)}`); }
-    catch (err) { toast(`Could not open Explorer: ${err.message}`, true); }
+    try {
+      await api('/api/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: actionEl.dataset.path }),
+      });
+    } catch (err) { toast(`Could not open Explorer: ${err.message}`, true); }
     return;
   }
 

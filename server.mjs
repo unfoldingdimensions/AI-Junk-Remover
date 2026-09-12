@@ -4,7 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { exec } from 'node:child_process';
+import { exec, spawn } from 'node:child_process';
 import { TOOLS } from './lib/registry.mjs';
 import { scanTools } from './lib/scanner.mjs';
 import { findRootFor, validateDeleteTarget, validateOpenTarget } from './lib/validate.mjs';
@@ -13,6 +13,53 @@ import { recyclePaths, permanentDelete, logHistory, readHistory } from './lib/de
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, 'web');
 const HOST = '127.0.0.1';
+
+// ---------- request guards ----------
+// The server binds loopback only, but "loopback only" does not stop a page you
+// happen to have open from driving this API (CSRF), nor a DNS-rebinding attack
+// from impersonating it. Every /api request must pass all three checks.
+
+const LOOPBACK_RE = /^(127\.0\.0\.1|localhost)(:\d+)?$/i;
+
+function checkApiOrigin(req) {
+  // 1. Host must name loopback. A rebinding attack resolves attacker.com to
+  //    127.0.0.1 but keeps its own Host header — this refuses it.
+  if (!LOOPBACK_RE.test(String(req.headers.host || '').trim())) return 'host not allowed';
+  // 2. If an Origin was sent (all POSTs and fetch() calls, cross-origin
+  //    subresources), it must be loopback too.
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      const u = new URL(origin);
+      if (u.protocol !== 'http:' || !LOOPBACK_RE.test(u.host)) return 'origin not allowed';
+    } catch { return 'origin not allowed'; }
+  }
+  // 3. Fetch Metadata: modern browsers label cross-site requests. Anything
+  //    that is not same-origin (or a direct navigation) is refused.
+  const site = req.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin' && site !== 'none') return 'cross-site request refused';
+  return null;
+}
+
+// Mutating endpoints accept JSON only. Requiring application/json also forces a
+// CORS preflight for any cross-origin caller, and this server answers no
+// preflight — so the browser never sends the real request.
+function requireJson(req, res) {
+  const ct = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (ct !== 'application/json') {
+    json(res, 415, { error: 'content-type must be application/json' });
+    return false;
+  }
+  return true;
+}
+
+// Open Explorer with the item selected. spawn + an argument array means no
+// shell ever parses the path, so it can never be read as a command.
+function openInExplorer(target) {
+  const child = spawn('explorer.exe', [`/select,${target}`], { windowsHide: true });
+  child.on('error', () => {});
+  child.unref?.();
+}
 
 const state = {
   scanning: false,
@@ -115,9 +162,15 @@ function startScan(onlyIds = null) {
 async function handleApi(req, res, url) {
   const route = url.pathname;
 
-  if (route === '/api/scan' && req.method === 'GET') {
-    const only = url.searchParams.get('tools');
-    const onlyIds = only ? only.split(',').filter(Boolean) : null;
+  const originErr = checkApiOrigin(req);
+  if (originErr) { json(res, 403, { error: originErr }); return; }
+
+  if (route === '/api/scan') {
+    if (req.method !== 'POST') { json(res, 405, { error: 'method not allowed' }); return; }
+    if (!requireJson(req, res)) return;
+    let body = {};
+    try { body = JSON.parse((await readBody(req)) || '{}'); } catch { json(res, 400, { error: 'bad json' }); return; }
+    const onlyIds = Array.isArray(body.tools) && body.tools.length > 0 ? body.tools.map(String) : null;
     const started = startScan(onlyIds);
     json(res, 200, { started, alreadyScanning: !started });
     return;
@@ -150,15 +203,20 @@ async function handleApi(req, res, url) {
     return;
   }
 
-  if (route === '/api/open' && req.method === 'GET') {
-    const p = url.searchParams.get('path') || '';
+  if (route === '/api/open') {
+    if (req.method !== 'POST') { json(res, 405, { error: 'method not allowed' }); return; }
+    if (!requireJson(req, res)) return;
+    let body;
+    try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
+    const p = typeof body.path === 'string' ? body.path : '';
     if (!validateOpenTarget(p)) { json(res, 400, { error: 'path not allowed' }); return; }
-    exec(`explorer.exe /select,"${p}"`, () => {});
+    openInExplorer(p);
     json(res, 200, { opened: p });
     return;
   }
 
   if (route === '/api/delete' && req.method === 'POST') {
+    if (!requireJson(req, res)) return;
     if (state.scanning) { json(res, 409, { error: 'scan in progress' }); return; }
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
@@ -180,6 +238,7 @@ async function handleApi(req, res, url) {
 }
 
 if (route === '/api/delete-all' && req.method === 'POST') {
+    if (!requireJson(req, res)) return;
     if (state.scanning) { json(res, 409, { error: 'scan in progress' }); return; }
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
@@ -197,6 +256,7 @@ if (route === '/api/delete-all' && req.method === 'POST') {
   // Read-only listing so the client can drive a chunked Delete All with
   // progress. Same tier/exclude/include rules as /api/delete-all.
   if (route === '/api/delete-all/paths' && req.method === 'POST') {
+    if (!requireJson(req, res)) return;
     if (state.scanning) { json(res, 409, { error: 'scan in progress' }); return; }
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { json(res, 400, { error: 'bad json' }); return; }
